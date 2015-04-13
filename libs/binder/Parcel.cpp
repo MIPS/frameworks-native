@@ -998,6 +998,55 @@ status_t Parcel::readAligned(T *pArg) const {
     }
 }
 
+#if defined(__mips__) && defined(__mips_hard_float)
+
+// Type specific instantiations of Parcel::readAligned(T*) to avoid
+// problems with unaligned data.
+
+template<>
+status_t Parcel::readAligned(double *pArg) const {
+    COMPILE_TIME_ASSERT_FUNCTION_SCOPE(PAD_SIZE(sizeof(double)) == sizeof(double));
+
+    if ((mDataPos+sizeof(double)) <= mDataSize) {
+        const void* data = mData+mDataPos;
+        mDataPos += sizeof(double);
+        if ((reinterpret_cast<size_t>(data) & (sizeof(double) - 1)) == 0) {
+            *pArg = *reinterpret_cast<const double*>(data);
+        } else {
+            int *d = reinterpret_cast<int *>(pArg);
+            const int *s = reinterpret_cast<const int *>(data);
+            d[0] = s[0];
+            d[1] = s[1];
+        }
+        return NO_ERROR;
+    } else {
+        return NOT_ENOUGH_DATA;
+    }
+}
+
+template<>
+status_t Parcel::readAligned(long long *pArg) const {
+    COMPILE_TIME_ASSERT_FUNCTION_SCOPE(PAD_SIZE(sizeof(long long)) == sizeof(long long));
+
+    if ((mDataPos+sizeof(long long)) <= mDataSize) {
+        const void* data = mData+mDataPos;
+        mDataPos += sizeof(long long);
+        if ((reinterpret_cast<size_t>(data) & (sizeof(long long) - 1)) == 0) {
+            *pArg = *reinterpret_cast<const long long*>(data);
+        } else {
+            int *d = reinterpret_cast<int *>(pArg);
+            const int *s = reinterpret_cast<const int *>(data);
+            d[0] = s[0];
+            d[1] = s[1];
+        }
+        return NO_ERROR;
+    } else {
+        return NOT_ENOUGH_DATA;
+    }
+}
+
+#endif
+
 template<class T>
 T Parcel::readAligned() const {
     T result;
@@ -1072,33 +1121,6 @@ float Parcel::readFloat() const
     return readAligned<float>();
 }
 
-#if defined(__mips__) && defined(__mips_hard_float)
-
-status_t Parcel::readDouble(double *pArg) const
-{
-    union {
-      double d;
-      unsigned long long ll;
-    } u;
-    u.d = 0;
-    status_t status;
-    status = readAligned(&u.ll);
-    *pArg = u.d;
-    return status;
-}
-
-double Parcel::readDouble() const
-{
-    union {
-      double d;
-      unsigned long long ll;
-    } u;
-    u.ll = readAligned<unsigned long long>();
-    return u.d;
-}
-
-#else
-
 status_t Parcel::readDouble(double *pArg) const
 {
     return readAligned(pArg);
@@ -1108,8 +1130,6 @@ double Parcel::readDouble() const
 {
     return readAligned<double>();
 }
-
-#endif
 
 status_t Parcel::readIntPtr(intptr_t *pArg) const
 {
